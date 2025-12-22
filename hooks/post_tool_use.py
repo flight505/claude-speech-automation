@@ -13,7 +13,8 @@ def load_config() -> dict:
     """Load YAML config with sensible defaults."""
     try:
         import yaml
-        config_path = Path(__file__).parent.parent.parent / "config.yaml"
+        # Config is in the plugin source directory, not cache
+        config_path = Path.home() / ".claude" / "plugins" / "speech-automation" / "config.yaml"
         with open(config_path) as f:
             return yaml.safe_load(f)
     except Exception:
@@ -105,7 +106,8 @@ def trigger_speech(message: str, voice: str = "af_bella", speed: float = 1.0) ->
     """Trigger TTS via subprocess (non-blocking)."""
     try:
         script_path = Path(__file__).parent.parent / "scripts" / "speak.py"
-        python_path = Path(__file__).parent.parent.parent / ".venv" / "bin" / "python"
+        # venv is in the plugin source directory, not cache
+        python_path = Path.home() / ".claude" / "plugins" / "speech-automation" / ".venv" / "bin" / "python"
 
         # Launch TTS in background
         subprocess.Popen(

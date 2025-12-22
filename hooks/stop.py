@@ -10,9 +10,9 @@ from pathlib import Path
 def main():
     """Hook entry point."""
     try:
-        # Load config
+        # Load config from plugin source directory, not cache
         import yaml
-        config_path = Path(__file__).parent.parent.parent / "config.yaml"
+        config_path = Path.home() / ".claude" / "plugins" / "speech-automation" / "config.yaml"
         with open(config_path) as f:
             config = yaml.safe_load(f)
 
@@ -22,7 +22,8 @@ def main():
 
         # Trigger goodbye speech
         script_path = Path(__file__).parent.parent / "scripts" / "speak.py"
-        python_path = Path(__file__).parent.parent.parent / ".venv" / "bin" / "python"
+        # venv is in the plugin source directory, not cache
+        python_path = Path.home() / ".claude" / "plugins" / "speech-automation" / ".venv" / "bin" / "python"
 
         subprocess.Popen(
             [str(python_path), str(script_path), "Session ended", "af_bella", "1.0"],
