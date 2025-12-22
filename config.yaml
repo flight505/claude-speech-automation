@@ -1,0 +1,64 @@
+# Speech Automation Configuration
+# Enable/disable automatic speech and configure event-specific settings
+
+# Master enable/disable switch for all automatic speech
+# Set to true to enable automatic notifications
+enabled: true
+
+# Minimum priority score to trigger speech (0-100)
+# Higher values = fewer notifications (more selective)
+# Lower values = more notifications (more verbose)
+min_priority: 30
+
+# Rate limiting (seconds between notifications)
+# Prevents notification spam for the same event type
+rate_limit_seconds: 60
+
+# Debounce delay (milliseconds)
+# Wait time before processing events to batch rapid operations
+debounce_ms: 500
+
+# Event-specific configuration
+events:
+  # Long-running operations (30+ seconds)
+  long_running:
+    enabled: true
+    min_duration_seconds: 30
+    voice: "af_bella"
+
+  # Errors and failures
+  errors:
+    enabled: true
+    voice: "af_bella"
+
+  # Test results (pytest, jest, etc.)
+  test_results:
+    enabled: true
+    speak_on_pass: false  # Don't announce passing tests
+    speak_on_fail: true   # Always announce test failures
+    voice: "af_bella"
+
+  # Build completions (webpack, vite, etc.)
+  build_completion:
+    enabled: true
+    voice: "af_bella"
+
+  # Git operations (commit, push, pull, etc.)
+  git_operations:
+    enabled: true
+    voice: "af_bella"
+
+# Quiet hours configuration
+# Reduce or disable notifications during specified hours
+quiet_hours:
+  enabled: false
+  start_hour: 22  # 10 PM
+  end_hour: 7     # 7 AM
+  behavior: "reduce"  # Options: "disable" or "reduce"
+  priority_multiplier: 0.3  # During quiet hours, multiply priority by this value
+
+# Usage Notes:
+# - Use /speech-config to modify settings interactively
+# - Changes take effect immediately (no restart needed)
+# - Nested keys can be set with dot notation: /speech-config set events.errors.enabled false
+# - Priority scores: 0-20 (low), 21-50 (medium), 51-80 (high), 81-100 (critical)

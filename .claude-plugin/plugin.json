@@ -1,0 +1,10 @@
+{
+  "name": "speech-automation",
+  "version": "1.0.0",
+  "description": "Intelligent automatic speech notifications with Kokoro TTS - provides slash commands and automation hooks",
+  "author": {
+    "name": "flight505",
+    "url": "https://github.com/flight505"
+  },
+  "homepage": "https://github.com/flight505/Intelligent-speech"
+}

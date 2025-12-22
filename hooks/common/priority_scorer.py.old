@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Priority scoring algorithm for speech automation events."""
+
+import re
+from typing import Dict, Any, Tuple
+from datetime import datetime
+
+
+class EventClassifier:
+    """Classifies tool execution events and calculates priority scores."""
+
+    # Keywords for event detection
+    ERROR_KEYWORDS = [
+        "error", "exception", "failed", "failure", "traceback",
+        "stderr", "panic", "fatal", "critical", "segfault"
+    ]
+
+    TEST_KEYWORDS = [
+        "pytest", "test", "spec", "jest", "mocha", "unittest",
+        "assert", "expect", "should", "test_", "_test"
+    ]
+
+    BUILD_KEYWORDS = [
+        "build", "compile", "webpack", "vite", "rollup", "esbuild",
+        "make", "cargo build", "npm run build", "yarn build"
+    ]
+
+    GIT_KEYWORDS = [
+        "git commit", "git push", "git pull", "git merge",
+        "git rebase", "git checkout", "git clone"
+    ]
+
+    ML_KEYWORDS = [
+        "train", "training", "epoch", "loss", "accuracy",
+        "model.fit", "torch", "tensorflow", "gpu", "cuda"
+    ]
+
+    def __init__(self):
+        self.last_event_time: Dict[str, datetime] = {}
+
+    def classify_event(
+        self,
+        tool_name: str,
+        tool_args: Dict[str, Any],
+        result: str,
+        duration_ms: float
+    ) -> Tuple[str, int, str]:
+        """
+        Classify event and calculate priority score.
+
+        Returns:
+            Tuple of (event_type, priority_score, suggested_voice)
+        """
+        priority = 0
+        event_type = "unknown"
+        voice = "af_bella"
+
+        # Convert duration to seconds
+        duration_sec = duration_ms / 1000.0
+
+        # 1. Check for errors (highest priority)
+        if self._contains_error(result):
+            priority += 50
+            event_type = "error"
+            voice = "am_adam"
+
+        # 2. Duration-based priority boost
+        if duration_sec >= 120:  # 2+ minutes
+            priority += 40
+            event_type = "long_running"
+        elif duration_sec >= 60:  # 1+ minute
+            priority += 30
+        elif duration_sec >= 30:  # 30+ seconds
+            priority += 20
+
+        # 3. Tool-specific classification
+        if tool_name == "Bash":
+            command = tool_args.get("command", "")
+
+            # Test execution
+            if self._contains_keywords(command, self.TEST_KEYWORDS):
+                event_type = "test_results"
+                voice = "bf_emma"
+
+                # Parse test results
+                if "passed" in result.lower() or "ok" in result.lower():
+                    priority += 15  # Moderate priority for pass
+                elif "failed" in result.lower() or "error" in result.lower():
+                    priority += 40  # High priority for failures
+
+            # Build operations
+            elif self._contains_keywords(command, self.BUILD_KEYWORDS):
+                event_type = "build_completion"
+                voice = "af_sarah"
+
+                if "success" in result.lower() or "complete" in result.lower():
+                    priority += 25
+                elif "error" in result.lower() or "failed" in result.lower():
+                    priority += 45
+
+            # Git operations
+            elif self._contains_keywords(command, self.GIT_KEYWORDS):
+                event_type = "git_operations"
+                voice = "bm_george"
+
+                if "error" in result.lower():
+                    priority += 40
+                elif duration_sec >= 10:
+                    priority += 20
+
+            # ML training
+            elif self._contains_keywords(command, self.ML_KEYWORDS):
+                event_type = "ml_training"
+                voice = "am_michael"
+
+                if duration_sec >= 300:  # 5+ minutes
+                    priority += 50
+                elif duration_sec >= 60:
+                    priority += 30
+
+        # 4. Generic long-running operations
+        if event_type == "unknown" and duration_sec >= 30:
+            event_type = "long_running"
+            priority += 25
+
+        # Cap priority at 100
+        priority = min(priority, 100)
+
+        return event_type, priority, voice
+
+    def _contains_error(self, text: str) -> bool:
+        """Check if text contains error indicators."""
+        text_lower = text.lower()
+        return any(keyword in text_lower for keyword in self.ERROR_KEYWORDS)
+
+    def _contains_keywords(self, text: str, keywords: list) -> bool:
+        """Check if text contains any of the given keywords."""
+        text_lower = text.lower()
+        return any(keyword in text_lower for keyword in keywords)
+
+    def generate_message(
+        self,
+        event_type: str,
+        tool_name: str,
+        tool_args: Dict[str, Any],
+        result: str,
+        duration_sec: float
+    ) -> str:
+        """Generate appropriate speech message for event type."""
+
+        if event_type == "error":
+            return f"Error detected in {tool_name} operation"
+
+        elif event_type == "test_results":
+            if "passed" in result.lower():
+                return f"Tests passed after {int(duration_sec)} seconds"
+            else:
+                return f"Test failures detected after {int(duration_sec)} seconds"
+
+        elif event_type == "build_completion":
+            if "success" in result.lower() or "complete" in result.lower():
+                return f"Build completed successfully in {int(duration_sec)} seconds"
+            else:
+                return f"Build failed after {int(duration_sec)} seconds"
+
+        elif event_type == "git_operations":
+            command = tool_args.get("command", "")
+            if "commit" in command:
+                return "Git commit completed"
+            elif "push" in command:
+                return "Git push completed"
+            elif "pull" in command:
+                return "Git pull completed"
+            else:
+                return "Git operation completed"
+
+        elif event_type == "ml_training":
+            return f"Training completed after {int(duration_sec)} seconds"
+
+        elif event_type == "long_running":
+            return f"Long operation completed after {int(duration_sec)} seconds"
+
+        else:
+            return f"{tool_name} completed after {int(duration_sec)} seconds"
+
+    def should_rate_limit(
+        self,
+        event_type: str,
+        rate_limit_seconds: int
+    ) -> bool:
+        """Check if event should be rate-limited."""
+        now = datetime.now()
+
+        if event_type in self.last_event_time:
+            last_time = self.last_event_time[event_type]
+            seconds_since_last = (now - last_time).total_seconds()
+
+            if seconds_since_last < rate_limit_seconds:
+                return True  # Rate limited
+
+        # Update last event time
+        self.last_event_time[event_type] = now
+        return False

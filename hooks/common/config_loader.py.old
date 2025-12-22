@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Configuration loader for speech automation hooks."""
+
+import yaml
+from pathlib import Path
+from typing import Dict, Any
+from pydantic import BaseModel, Field
+
+
+class QuietHoursConfig(BaseModel):
+    """Quiet hours configuration."""
+    enabled: bool = False
+    start_hour: int = Field(ge=0, le=23, default=22)
+    end_hour: int = Field(ge=0, le=23, default=7)
+    behavior: str = Field(default="reduce", pattern="^(disable|reduce)$")
+    priority_multiplier: float = Field(ge=0.0, le=1.0, default=0.3)
+
+
+class EventConfig(BaseModel):
+    """Event-specific configuration."""
+    enabled: bool = False
+    voice: str = "af_bella"
+    min_duration_seconds: int = 30
+    speak_on_pass: bool = False
+    speak_on_fail: bool = True
+
+
+class EventsConfig(BaseModel):
+    """All event type configurations."""
+    long_running: EventConfig = Field(default_factory=EventConfig)
+    errors: EventConfig = Field(default_factory=EventConfig)
+    test_results: EventConfig = Field(default_factory=EventConfig)
+    build_completion: EventConfig = Field(default_factory=EventConfig)
+    git_operations: EventConfig = Field(default_factory=EventConfig)
+
+
+class SpeechConfig(BaseModel):
+    """Complete speech automation configuration."""
+    enabled: bool = False
+    min_priority: int = Field(ge=0, le=100, default=30)
+    rate_limit_seconds: int = Field(ge=0, default=60)
+    debounce_ms: int = Field(ge=0, default=500)
+    events: EventsConfig = Field(default_factory=EventsConfig)
+    quiet_hours: QuietHoursConfig = Field(default_factory=QuietHoursConfig)
+
+
+def load_config() -> SpeechConfig:
+    """Load configuration from YAML file with validation."""
+    config_path = Path.home() / ".claude/plugins/speech-automation/config.yaml"
+
+    if not config_path.exists():
+        # Return defaults if config doesn't exist
+        return SpeechConfig()
+
+    with open(config_path) as f:
+        raw_config = yaml.safe_load(f)
+
+    # Validate and parse with Pydantic
+    return SpeechConfig(**raw_config)
+
+
+def is_in_quiet_hours(config: SpeechConfig) -> bool:
+    """Check if current time is within quiet hours."""
+    from datetime import datetime
+
+    if not config.quiet_hours.enabled:
+        return False
+
+    now = datetime.now()
+    current_hour = now.hour
+
+    start = config.quiet_hours.start_hour
+    end = config.quiet_hours.end_hour
+
+    # Handle overnight ranges (e.g., 22:00 to 7:00)
+    if start > end:
+        return current_hour >= start or current_hour < end
+    else:
+        return start <= current_hour < end
+
+
+def apply_quiet_hours_multiplier(priority: int, config: SpeechConfig) -> int:
+    """Apply quiet hours priority reduction if applicable."""
+    if is_in_quiet_hours(config):
+        if config.quiet_hours.behavior == "disable":
+            return 0
+        elif config.quiet_hours.behavior == "reduce":
+            return int(priority * config.quiet_hours.priority_multiplier)
+
+    return priority
